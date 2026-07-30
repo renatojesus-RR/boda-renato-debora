@@ -1,0 +1,21 @@
+{
+  "name": "Boda de Renato & Debora",
+  "short_name": "Renato & Debora",
+  "description": "Acompáñanos a celebrar nuestra boda este 04 de setiembre de 2026.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#722F37",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "events"],
+  "lang": "es-PE",
+  "dir": "ltr"
+}
