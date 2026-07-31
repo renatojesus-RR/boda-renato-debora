@@ -377,7 +377,7 @@ export default function Hero() {
               </div>
             </motion.div>
             
-            {/* Bride name (DÉBORA) */}
+            {/* Bride name (Debora) */}
             <motion.h1
               className="font-playfair text-[clamp(5rem,12vw,7rem)] md:text-[clamp(5rem,15vw,8rem)] font-thin tracking-[0.02em] leading-[1.1]"
               initial={{ opacity: 0, x: 50 }}

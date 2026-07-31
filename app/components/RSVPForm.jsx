@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Check, AlertCircle, Phone, User, QrCode, ShieldCheck, Calendar, Clock, X, HeartX } from 'lucide-react';
+import { Search, Check, AlertCircle, Phone, User, QrCode, ShieldCheck, Calendar, Clock, X, HeartOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import QRCode from 'react-qr-code';
 import settings from '../config/settings';
@@ -201,7 +201,7 @@ export default function RSVPForm() {
                                     </span>
                                 </div>
                                 <h2 className="text-3xl font-playfair text-white mt-4 mb-1">Pase de Invitado</h2>
-                                <p className="text-[#d4af37] text-xs uppercase tracking-widest">Boda de Renato & Débora</p>
+                                <p className="text-[#d4af37] text-xs uppercase tracking-widest">Boda de Renato & Debora</p>
                             </div>
 
                             <div className="p-8 text-center space-y-6 ml-2">
@@ -243,12 +243,12 @@ export default function RSVPForm() {
                         /* TARJETA 2: NO ASISTIRÁ (NO ASISTE - AGRADECIMIENTO SOBRIO) */
                         <div className="bg-[#0a0a0a]/90 backdrop-blur-md border border-white/10 rounded-3xl p-8 text-center shadow-2xl space-y-6 relative overflow-hidden">
                             <div className="w-16 h-16 bg-[#722F37]/20 border border-[#722F37]/40 rounded-full flex items-center justify-center mx-auto text-[#d4af37]">
-                                <HeartX className="w-8 h-8" />
+                                <HeartOff className="w-8 h-8" />
                             </div>
 
                             <div className="space-y-2">
                                 <h2 className="text-2xl font-playfair text-white">Respuesta Registrada</h2>
-                                <p className="text-xs uppercase tracking-widest text-[#d4af37]">Boda de Renato & Débora</p>
+                                <p className="text-xs uppercase tracking-widest text-[#d4af37]">Boda de Renato & Debora</p>
                             </div>
 
                             <div className="py-4 border-y border-white/10 space-y-2">

@@ -71,7 +71,7 @@ export default function Footer() {
                         </span>
                     </div>
 
-                    {/* Nombres: Renato & Débora */}
+                    {/* Nombres: Renato & Debora */}
                     <div>
                         <h3 className="font-playfair text-3xl text-white mb-2 tracking-wide">
                             {couple.groom.name} <span className="text-[#722F37] font-serif">&</span> {couple.bride.name}
