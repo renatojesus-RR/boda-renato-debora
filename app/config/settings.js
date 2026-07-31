@@ -162,7 +162,7 @@ const settings = {
     enabled: true,
     title: "Captura el Momento",
     subtitle: "Sé nuestro fotógrafo",
-    message: "Sabemos que capturarás momentos increíbles hoy. Ayúdanos a guardar cada recuerdo subiendo tus fotos y videos a nuestro álbum digital.",
+    message: "Historias reales, momentos eternos. Deja tu huella en nuestro álbum y celebremos la gracia de estar juntos.",
     buttonText: "Subir Fotos / Videos",
     driveUrl: "https://forms.gle/ABv88FqtgfGCY1EA7", // Aquí pondrás el link corto de tu Google Form
     qrImage: "/images/qr-code.png" // Puedes generar un QR de ese link y guardarlo en public/images/

@@ -10,7 +10,7 @@ export default function Registry() {
   const { registry } = settings;
   const [activeTab, setActiveTab] = useState(null); // null = Oculto por defecto
   const [copiedField, setCopiedField] = useState(null);
-  const [showQr, setShowQr] = useState(false);
+  const [openQrIdx, setOpenQrIdx] = useState(null); // Guarda el índice del QR activo
 
   if (!registry?.enabled) return null;
 
@@ -22,6 +22,10 @@ export default function Registry() {
 
   const toggleTab = (tab) => {
     setActiveTab(prev => prev === tab ? null : tab);
+  };
+
+  const toggleQr = (idx) => {
+    setOpenQrIdx(prev => prev === idx ? null : idx);
   };
 
   return (
@@ -162,19 +166,19 @@ export default function Registry() {
                     )}
                   </div>
 
-                  {/* Botón ver QR */}
+                  {/* Botón ver QR inductivo por tarjeta */}
                   {bank.qrImage && (
                     <button
-                      onClick={() => setShowQr(!showQr)}
+                      onClick={() => toggleQr(idx)}
                       className="mt-4 w-full py-2 bg-white/5 hover:bg-[#d4af37]/20 border border-white/10 hover:border-[#d4af37] text-xs text-white rounded-lg flex items-center justify-center gap-2 transition-all"
                     >
                       <QrCode className="w-4 h-4 text-[#d4af37]" />
-                      {showQr ? 'Ocultar Código QR' : 'Mostrar Código QR'}
+                      {openQrIdx === idx ? 'Ocultar Código QR' : 'Mostrar Código QR'}
                     </button>
                   )}
 
-                  {/* Desplegable QR */}
-                  {bank.qrImage && showQr && (
+                  {/* Desplegable QR específico */}
+                  {bank.qrImage && openQrIdx === idx && (
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -195,7 +199,7 @@ export default function Registry() {
             </motion.div>
           )}
 
-          {/* PESTAÑA ENTREGA PRESENCIAL (SOPORTA 1 O 2 DIRECCIONES) */}
+          {/* PESTAÑA ENTREGA PRESENCIAL */}
           {activeTab === 'physical' && (
             <motion.div
               key="physical"
@@ -245,7 +249,6 @@ export default function Registry() {
                   ))}
                 </div>
               ) : (
-                /* Compatibilidad si usas una sola dirección */
                 <div className="bg-black/40 p-4 rounded-xl border border-white/10 max-w-md mx-auto space-y-1">
                   <p className="text-white font-medium text-base">
                     {registry.physical.address}
@@ -256,7 +259,6 @@ export default function Registry() {
                 </div>
               )}
 
-              {/* Nota general si existe */}
               {registry.physical.notes && !registry.physical.addresses && (
                 <p className="text-xs text-[#faf8f3]/50 italic pt-2">
                   * {registry.physical.notes}

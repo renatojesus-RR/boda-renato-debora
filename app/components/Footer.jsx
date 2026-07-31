@@ -2,13 +2,31 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Heart } from 'lucide-react';
+import { Heart, MessageCircle } from 'lucide-react';
 import settings from '../config/settings';
 
 export default function Footer() {
-    const { couple, social } = settings;
+    const { couple, social, wedding } = settings;
     
-    // Botones con emoticones de novio y novia a sus perfiles de Instagram
+    // Links directos a WhatsApp
+    const groomPhone = couple.groom.phone?.replace(/[^0-9]/g, '') || '51987654321';
+    const bridePhone = couple.bride.phone?.replace(/[^0-9]/g, '') || '51987654321';
+
+    const contactLinks = [
+        { 
+            name: '🤵🏻', 
+            label: `WhatsApp ${couple.groom.name}`, 
+            href: `https://wa.me/${groomPhone}?text=Hola%20${couple.groom.name},%20tengo%20una%20consulta%20sobre%20la%20boda`,
+            type: 'wa'
+        },
+        { 
+            name: '👰🏻', 
+            label: `WhatsApp ${couple.bride.name}`, 
+            href: `https://wa.me/${bridePhone}?text=Hola%20${couple.bride.name},%20tengo%20una%20consulta%20sobre%20la%20boda`,
+            type: 'wa'
+        }
+    ];
+
     const socialLinks = [
         { 
             name: '🤵🏻', 
@@ -25,7 +43,7 @@ export default function Footer() {
     return (
         <footer className="py-20 bg-[#1a1a1a] relative overflow-hidden">
             {/* Decorative Background */}
-            <div className="absolute inset-0 opacity-5">
+            <div className="absolute inset-0 opacity-5 pointer-events-none">
                 <div 
                     className="absolute w-[200%] h-[200%] top-[-50%] left-[-50%]"
                     style={{
@@ -53,42 +71,65 @@ export default function Footer() {
                         </span>
                     </div>
 
-                    {/* Nombres Invertidos: Renato & Débora */}
+                    {/* Nombres: Renato & Débora */}
                     <div>
                         <h3 className="font-playfair text-3xl text-white mb-2 tracking-wide">
                             {couple.groom.name} <span className="text-[#722F37] font-serif">&</span> {couple.bride.name}
                         </h3>
                         <p className="text-xs text-[#faf8f3]/60 tracking-[3px] uppercase mb-6">
-                            {settings.wedding.displayDate}
+                            {wedding.displayDate}
                         </p>
 
-                        {/* Mensaje recuperado */}
                         <div className="space-y-2 mt-4">
                             <p className="font-playfair text-xl text-[#faf8f3]/90 italic">
                                 Tenemos muchas ganas de celebrar contigo.
                             </p>
-                            <p className="text-sm text-[#faf8f3]/60 font-light">
-                                Si tienes alguna pregunta, contáctanos en:
+                            <p className="text-xs text-[#faf8f3]/50 font-light uppercase tracking-widest pt-2">
+                                ¿Tienes alguna consulta? Escríbenos directamente:
                             </p>
                         </div>
                     </div>
 
-                    {/* Botones de Redes Sociales con Emojis 🤵🏻‍♂️ y 👰🏻‍♀️ */}
-                    <div className="flex justify-center items-center gap-6 pt-2">
-                        {socialLinks.map((link, index) => (
+                    {/* Botones de Contacto Directo por WhatsApp */}
+                    <div className="flex flex-col sm:flex-row justify-center items-center gap-3 max-w-md mx-auto pt-2">
+                        {contactLinks.map((link, index) => (
                             <motion.a 
                                 key={index} 
                                 href={link.href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title={link.label}
-                                className="w-14 h-14 rounded-full border border-white/10 bg-white/5 hover:bg-[#722F37]/20 hover:border-[#722F37] flex items-center justify-center text-2xl transition-all duration-300 shadow-lg"
-                                whileHover={{ scale: 1.15, rotate: 5 }}
-                                whileTap={{ scale: 0.95 }}
+                                className="w-full sm:w-auto px-5 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-[#722F37]/30 hover:border-[#d4af37]/50 flex items-center justify-center gap-2 text-xs text-[#faf8f3]/90 transition-all duration-300 shadow-md group"
+                                whileHover={{ scale: 1.03 }}
+                                whileTap={{ scale: 0.97 }}
                             >
-                                <span>{link.name}</span>
+                                <span className="text-base">{link.name}</span>
+                                <MessageCircle className="w-3.5 h-3.5 text-[#d4af37] group-hover:scale-110 transition-transform" />
+                                <span className="font-medium tracking-wider">WhatsApp {index === 0 ? couple.groom.name : couple.bride.name}</span>
                             </motion.a>
                         ))}
+                    </div>
+
+                    {/* Redes Sociales (Instagram) */}
+                    <div className="pt-2">
+                        <p className="text-[10px] text-[#faf8f3]/40 uppercase tracking-widest mb-3">
+                            O visítanos en Instagram:
+                        </p>
+                        <div className="flex justify-center items-center gap-4">
+                            {socialLinks.map((link, index) => (
+                                <motion.a 
+                                    key={index} 
+                                    href={link.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={link.label}
+                                    className="w-11 h-11 rounded-full border border-white/10 bg-white/5 hover:bg-[#722F37]/20 hover:border-[#722F37] flex items-center justify-center text-xl transition-all duration-300 shadow-lg"
+                                    whileHover={{ scale: 1.15, rotate: 5 }}
+                                    whileTap={{ scale: 0.95 }}
+                                >
+                                    <span>{link.name}</span>
+                                </motion.a>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Separador y Créditos */}
