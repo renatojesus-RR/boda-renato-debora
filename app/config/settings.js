@@ -247,7 +247,14 @@ const settings = {
   contact: {
     weddingPlanner: { name: "Renato y Debora", phone: "+51 901 416 331", email: "renatojesus.rod@gmail.com" },
     photographer: { name: "Por definir", instagram: "" }
+  },
+
+  admin: {
+    pin: "0108",
   }
+
 };
+
+
 
 export default settings;
