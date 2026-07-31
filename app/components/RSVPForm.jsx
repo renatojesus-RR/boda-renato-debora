@@ -237,7 +237,7 @@ export default function RSVPForm() {
 
                     <p className="text-center text-[#faf8f3]/50 text-xs mt-6 px-4 leading-relaxed">
                         Toma una captura de pantalla de este pase. <br/>
-                        <span className="text-[#d4af37]">Si lo pierdes, puedes volver a ingresar tus datos en esta página para recuperarlo.</span>
+                        <span className="text-[#d4af37]">Si deseas, puedes volver a ingresar tus datos en esta página para vizualizar tu pase.</span>
                     </p>
                 </motion.div>
             </section>
