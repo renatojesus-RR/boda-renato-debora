@@ -33,14 +33,22 @@ const isGenericName = (str) => {
     return genericKeywords.some(keyword => norm.includes(keyword));
 };
 
+// Convertir cualquier texto a Title Case (Mayúsculas Capitales)
+const toTitleCase = (str) => {
+    if (!str) return '';
+    return str
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+};
+
 // Imprimir en el pase VIP (conserva mayúsculas/acentos pero oculta notas internas entre paréntesis)
 const getDisplayName = (str) => {
     if (!str) return '';
     let sinParentesis = str.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-    if (sinParentesis.length === 0) {
-        return str.replace(/[()]/g, '').trim();
-    }
-    return sinParentesis;
+    let baseName = sinParentesis.length === 0 ? str.replace(/[()]/g, '').trim() : sinParentesis;
+    return toTitleCase(baseName);
 };
 
 export default function RSVPForm() {

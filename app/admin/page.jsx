@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Users, CheckCircle2, Clock, Music, Search, RefreshCw, Phone, Disc, Link as LinkIcon, ShieldAlert } from 'lucide-react';
+import { Lock, Users, CheckCircle2, Clock, Music, Search, RefreshCw, Phone, Disc, Link as LinkIcon, ShieldAlert, MessageCircle, UserPlus, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import settings from '../config/settings';
 
@@ -21,6 +21,49 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'confirmed' | 'pending'
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Estado para controlar el modal / formulario de nuevo invitado
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newGuestName, setNewGuestName] = useState('');
+  const [newGuestPhone, setNewGuestPhone] = useState('');
+  const [newGuestTable, setNewGuestTable] = useState('');
+
+  const handleCreateGuest = async (e) => {
+    e.preventDefault();
+    if (!newGuestName.trim()) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin: pinInput,
+          action: 'add_guest',
+          guestData: {
+            nombre: newGuestName,
+            telefono: newGuestPhone,
+            numero_mesa: newGuestTable
+          }
+        }),
+      });
+
+      const result = await res.json();
+      if (res.ok && result.newGuest) {
+        setRsvps(prev => [...prev, result.newGuest].sort((a,b) => a.nombre_invitado.localeCompare(b.nombre_invitado)));
+        setShowAddModal(false);
+        setNewGuestName('');
+        setNewGuestPhone('');
+        setNewGuestTable('');
+      } else {
+        alert(result.error || 'No se pudo crear el invitado');
+      }
+    } catch (err) {
+      alert('Error de red al crear el invitado');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 1. Manejo del Login por PIN
   const handlePinSubmit = async (e) => {
     e.preventDefault();
@@ -28,7 +71,6 @@ export default function AdminDashboard() {
     setPinError(false);
 
     try {
-      // Petición POST al endpoint del servidor
       const res = await fetch('/api/admin-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,7 +116,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Métrica calculadas
+  // Métricas calculadas
   const totalGuests = rsvps.length;
   const confirmedGuests = rsvps.filter(r => r.asistira).length;
   const pendingGuests = totalGuests - confirmedGuests;
@@ -94,6 +136,46 @@ export default function AdminDashboard() {
   const cleanName = (str) => {
     if (!str) return '';
     return str.replace(/\([^)]*\)/g, '').trim();
+  };
+
+  const buildWhatsappUrl = (phone, rawName, asistira) => {
+    if (!phone) return null;
+    
+    const cleanNum = phone.replace(/\D/g, '');
+    const fullPhone = cleanNum.length === 9 ? `51${cleanNum}` : cleanNum;
+    
+    const name = cleanName(rawName);
+    const siteUrl = "https://bodarenatoydebora.vercel.app";
+
+    let message = "";
+    if (asistira) {
+      message = `¡Hola ${name}! 💍 Te compartimos el enlace a la web de nuestra boda para que consultes tu pase VIP con código QR o veas la ubicación del evento: ${siteUrl} ¡Esperamos verte pronto! - Renato & Débora`;
+    } else {
+      message = `¡Hola ${name}! ✨ Te compartimos con mucho cariño la invitación a nuestra boda: ${siteUrl}. Les agradeceremos confirmar su asistencia a través del enlace cuando puedan. ¡Un fuerte abrazo! - Renato & Débora`;
+    }
+
+    return `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
+  };
+
+  // Agregar estados para edición de teléfono en AdminDashboard:
+  const [editingId, setEditingId] = useState(null);
+  const [tempPhone, setTempPhone] = useState('');
+
+  // Función para guardar teléfono rápido desde Admin:
+  const handleSavePhone = async (id) => {
+    if (!tempPhone.trim() || tempPhone.trim().length < 9) return;
+  
+    const cleanNum = tempPhone.replace(/\D/g, '');
+    const { error } = await supabase
+      .from('rsvps')
+      .update({ telefono: cleanNum })
+      .eq('id', id);
+
+    if (!error) {
+      setRsvps(prev => prev.map(item => item.id === id ? { ...item, telefono: cleanNum } : item));
+      setEditingId(null);
+      setTempPhone('');
+    }
   };
 
   // VISTA 1: PANTALLA DE LOGIN POR PIN
@@ -147,25 +229,36 @@ export default function AdminDashboard() {
 
   // VISTA 2: DASHBOARD PRINCIPAL
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pb-20">
+    <div className="min-h-screen bg-[#0a0a0a] text-white pb-20 relative">
       
       {/* Cabecera Admin */}
-      <header className="bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
+      <header className="bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="font-playfair text-xl md:text-2xl text-white font-medium">Control de Invitados</h1>
             <p className="text-[10px] text-[#d4af37] uppercase tracking-widest">Renato & Debora</p>
           </div>
 
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[#d4af37] transition-all flex items-center gap-2 text-xs"
-            title="Actualizar datos"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Actualizar</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 🟢 BOTÓN PARA ABRIR EL MODAL DE AGREGAR INVITADO */}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3 py-2 bg-[#722F37] hover:bg-[#8b3843] border border-[#722F37] rounded-xl text-white transition-all flex items-center gap-1.5 text-xs font-semibold shadow-lg"
+            >
+              <UserPlus className="w-4 h-4 text-[#d4af37]" />
+              <span>+ Nuevo Invitado</span>
+            </button>
+
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[#d4af37] transition-all flex items-center gap-2 text-xs"
+              title="Actualizar datos"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Actualizar</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -304,24 +397,76 @@ export default function AdminDashboard() {
                           )}
                         </p>
 
-                        <div className="flex items-center gap-4 mt-1 text-xs text-white/50">
-                          {item.telefono ? (
-                            <span className="flex items-center gap-1 text-emerald-400/90 font-mono">
-                              <Phone className="w-3 h-3" /> {item.telefono}
-                            </span>
+                        {/* Sección de Teléfono / Edición rápida */}
+                        <div className="flex items-center gap-2 mt-1 text-xs">
+                          {editingId === item.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="tel"
+                                value={tempPhone}
+                                onChange={(e) => setTempPhone(e.target.value)}
+                                placeholder="Ej. 987654321"
+                                className="px-2 py-1 bg-black border border-[#d4af37] text-white text-xs rounded-lg outline-none w-32 font-mono"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleSavePhone(item.id)}
+                                className="px-2 py-1 bg-emerald-500 text-black font-semibold text-[10px] rounded-lg"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="px-2 py-1 bg-white/10 text-white/60 text-[10px] rounded-lg"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : item.telefono ? (
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center gap-1 text-emerald-400/90 font-mono">
+                                <Phone className="w-3 h-3" /> {item.telefono}
+                              </span>
+                              <button 
+                                onClick={() => { setEditingId(item.id); setTempPhone(item.telefono); }}
+                                className="text-[10px] text-white/30 hover:text-[#d4af37] underline ml-1"
+                              >
+                                Editar
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-white/30 text-[10px]">Sin teléfono</span>
+                            <button
+                              onClick={() => { setEditingId(item.id); setTempPhone(''); }}
+                              className="text-[10px] text-[#d4af37] hover:underline flex items-center gap-1"
+                            >
+                              + Agregar Celular
+                            </button>
                           )}
 
                           {item.numero_mesa && (
-                            <span className="text-[#d4af37]">
+                            <span className="text-[#d4af37] ml-2">
                               Mesa: {item.numero_mesa}
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div>
+                      <div className="flex items-center gap-2">
+                        {/* 🟢 BOTÓN WHATSAPP 1-CLICK */}
+                        {item.telefono && (
+                          <a
+                            href={buildWhatsappUrl(item.telefono, item.nombre_invitado, item.asistira)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl transition-all flex items-center gap-1.5 text-xs font-medium"
+                            title="Enviar mensaje personalizado por WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Enviar WA</span>
+                          </a>
+                        )}
+
+                        {/* ETIQUETA DE ESTADO */}
                         {item.asistira ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold uppercase tracking-wider">
                             <CheckCircle2 className="w-3 h-3" /> Confirmado
@@ -382,6 +527,90 @@ export default function AdminDashboard() {
         )}
 
       </main>
+
+      {/* 🔴 MODAL PARA AGREGAR NUEVO INVITADO */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-[#121212] border border-white/10 p-6 rounded-3xl max-w-md w-full shadow-2xl space-y-6 relative"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <h3 className="text-lg font-playfair text-white">Agregar Nuevo Invitado</h3>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1 text-white/40 hover:text-white rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateGuest} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-[#d4af37] uppercase tracking-wider mb-1 font-semibold">
+                    Nombre Completo <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newGuestName}
+                    onChange={(e) => setNewGuestName(e.target.value)}
+                    placeholder="Ej. Juan Carlos Pérez"
+                    className="w-full px-4 py-3 bg-black/60 border border-white/10 rounded-xl text-white focus:border-[#d4af37] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#d4af37] uppercase tracking-wider mb-1 font-semibold">
+                    Número de Celular (Opcional)
+                  </label>
+                  <input
+                    type="tel"
+                    value={newGuestPhone}
+                    onChange={(e) => setNewGuestPhone(e.target.value)}
+                    placeholder="Ej. 987654321"
+                    className="w-full px-4 py-3 bg-black/60 border border-white/10 rounded-xl text-white focus:border-[#d4af37] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#d4af37] uppercase tracking-wider mb-1 font-semibold">
+                    Número de Mesa (Opcional)
+                  </label>
+                  <input
+                    type="number"
+                    value={newGuestTable}
+                    onChange={(e) => setNewGuestTable(e.target.value)}
+                    placeholder="Ej. 5"
+                    className="w-full px-4 py-3 bg-black/60 border border-white/10 rounded-xl text-white focus:border-[#d4af37] outline-none"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium border border-white/10"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-3 bg-[#722F37] hover:bg-[#8b3843] text-white font-semibold rounded-xl border border-[#722F37] flex items-center justify-center gap-2"
+                  >
+                    {loading ? 'Guardando...' : 'Guardar Invitado'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
