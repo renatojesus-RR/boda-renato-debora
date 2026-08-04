@@ -7,24 +7,33 @@ import { supabase } from '../../lib/supabase';
 import QRCode from 'react-qr-code';
 import settings from '../config/settings';
 
-// Función para normalizar texto en las búsquedas (quitar acentos, paréntesis y mayúsculas)
+// Limpiar números de teléfono (deja solo dígitos)
+const cleanPhone = (str) => (str ? str.replace(/\D/g, '') : '');
+
+// Normalizar texto en búsquedas (quitar acentos, paréntesis y mayúsculas)
 const normalizeString = (str) => {
     if (!str) return '';
     let normalized = str
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+        .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
     
     let sinParentesis = normalized.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-    
     if (sinParentesis.length === 0) {
         return normalized.replace(/[()]/g, '').trim();
     }
-    
     return sinParentesis;
 };
 
-// Función para imprimir en el pase VIP (conserva mayúsculas/acentos pero oculta las notas internas)
+// Detectar si un nombre es genérico / plantilla / en blanco
+const isGenericName = (str) => {
+    if (!str || !str.trim()) return true;
+    const norm = normalizeString(str);
+    const genericKeywords = ['invitado', 'acompaniante', 'acompanante', 'sin nombre', 'sin asignar', 'pendiente', 'extra', 'pase extra'];
+    return genericKeywords.some(keyword => norm.includes(keyword));
+};
+
+// Imprimir en el pase VIP (conserva mayúsculas/acentos pero oculta notas internas entre paréntesis)
 const getDisplayName = (str) => {
     if (!str) return '';
     let sinParentesis = str.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
@@ -58,15 +67,18 @@ export default function RSVPForm() {
         setErrorMsg('');
         setIsRetrieval(false);
 
+        const cleanInputPhone = cleanPhone(telefono);
+        const trimmedNombre = nombre.trim();
+
         // 1. Validaciones Locales
-        if (nombre.trim().length < 3) {
+        if (trimmedNombre.length < 3) {
             setErrorMsg('Por favor, ingresa al menos 3 letras de tu nombre y apellido.');
             setIsSubmitting(false);
             return;
         }
 
-        if (!telefono.trim() || telefono.trim().length < 9) {
-            setErrorMsg('El número de celular es obligatorio y debe ser válido.');
+        if (!cleanInputPhone || cleanInputPhone.length < 9) {
+            setErrorMsg('El número de celular es obligatorio y debe contener al menos 9 dígitos.');
             setIsSubmitting(false);
             return;
         }
@@ -78,97 +90,156 @@ export default function RSVPForm() {
                 .select('id, nombre_invitado, numero_mesa, asistira, telefono');
 
             if (error || !allGuests) {
-                setErrorMsg('No encontramos tu nombre en nuestros registros. Por favor, asegúrate de escribirlo bien o contáctate con nosotros.');
+                setErrorMsg('No encontramos registros en el sistema. Por favor inténtalo de nuevo o contáctanos.');
                 setIsSubmitting(false);
                 return;
             }
 
-            // 3. Búsqueda Inteligente
-            const normalizedInput = normalizeString(nombre);
-            const inputWords = normalizedInput.split(' ').filter(w => w.length > 0);
+            let selectedGuest = null;
+            let shouldUpdateName = false;
 
-            const matches = allGuests.filter(guest => {
-                const normalizedGuestName = normalizeString(guest.nombre_invitado);
-                return inputWords.every(word => normalizedGuestName.includes(word));
-            });
+            // -------------------------------------------------------------
+            // BÚSQUEDA 1: COINCIDENCIA POR NÚMERO DE TELÉFONO PRE-REGISTRADO
+            // -------------------------------------------------------------
+            const phoneMatch = allGuests.find(g => cleanPhone(g.telefono) === cleanInputPhone && cleanPhone(g.telefono) !== '');
 
-            if (matches.length === 0) {
-                setErrorMsg('No encontramos tu nombre en nuestros registros. Por favor, asegúrate de escribirlo bien o contáctate con nosotros.');
-                setIsSubmitting(false);
-                return;
-            }
+            if (phoneMatch) {
+                const normMatchedName = normalizeString(phoneMatch.nombre_invitado);
+                const normInputName = normalizeString(trimmedNombre);
 
-            let matchedGuest;
-            if (matches.length > 1) {
-                const exactMatch = matches.find(g => normalizeString(g.nombre_invitado) === normalizedInput);
-                if (exactMatch) {
-                    matchedGuest = exactMatch;
+                // Si el registro tenía un nombre genérico o vacío, asignamos el nuevo nombre
+                if (isGenericName(phoneMatch.nombre_invitado)) {
+                    selectedGuest = phoneMatch;
+                    shouldUpdateName = true;
+                } else if (normMatchedName.includes(normInputName) || normInputName.includes(normMatchedName)) {
+                    // Si el teléfono coincide y el nombre es similar/mismo usuario consultando
+                    selectedGuest = phoneMatch;
                 } else {
-                    setErrorMsg('Encontramos a varias personas que coinciden. Por favor, incluye un apellido más para ser exactos.');
+                    // Teléfono registrado a otro nombre totalmente distinto
+                    setErrorMsg(`Este número de celular ya está registrado a nombre de: "${getDisplayName(phoneMatch.nombre_invitado)}". Por favor verifica tus datos.`);
                     setIsSubmitting(false);
                     return;
                 }
-            } else {
-                matchedGuest = matches[0];
             }
 
-            const data = matchedGuest;
+            // -------------------------------------------------------------
+            // BÚSQUEDA 2: COINCIDENCIA POR NOMBRE Y RESOLUCIÓN DE HOMONIMIAS
+            // -------------------------------------------------------------
+            if (!selectedGuest) {
+                const normalizedInput = normalizeString(trimmedNombre);
+                const inputWords = normalizedInput.split(' ').filter(w => w.length > 0);
 
-            // 4. CASO A: SI YA TENÍA UN TELÉFONO REGISTRADO (CONSULTA O CAMBIO DE ESTADO)
-            if (data.telefono) {
-                if (data.telefono !== telefono.trim()) {
-                    setErrorMsg('Esta invitación ya fue respondida previamente con un número de celular diferente. Acceso denegado.');
+                // Filtrar invitados cuyo nombre contenga todas las palabras ingresadas
+                const nameMatches = allGuests.filter(guest => {
+                    if (isGenericName(guest.nombre_invitado)) return false;
+                    const normGuestName = normalizeString(guest.nombre_invitado);
+                    return inputWords.every(word => normGuestName.includes(word));
+                });
+
+                if (nameMatches.length === 0) {
+                    setErrorMsg('No encontramos tu nombre en la lista de invitados. Por favor, asegúrate de escribirlo tal como figura en tu invitación o contáctanos.');
                     setIsSubmitting(false);
                     return;
                 }
-                
-                // Si está volviendo a ingresar con el mismo teléfono, actualizamos su decisión
+
+                if (nameMatches.length === 1) {
+                    selectedGuest = nameMatches[0];
+                } else {
+                    // === RESOLUCIÓN DE HOMONIMIAS (MÁS DE 1 COINCIDENCIA DE NOMBRE) ===
+                    
+                    // A) ¿Alguno de los homónimos ya tiene este celular registrado?
+                    const samePhoneMatch = nameMatches.find(g => cleanPhone(g.telefono) === cleanInputPhone);
+                    if (samePhoneMatch) {
+                        selectedGuest = samePhoneMatch;
+                    } else {
+                        // B) Seleccionar la entrada de homónimo que aún NO tenga celular registrado (unassigned)
+                        const unassignedMatches = nameMatches.filter(g => !g.telefono || cleanPhone(g.telefono) === '');
+                        
+                        if (unassignedMatches.length === 1) {
+                            selectedGuest = unassignedMatches[0];
+                        } else if (unassignedMatches.length > 1) {
+                            // C) Buscar coincidencia exacta de nombre
+                            const exactMatch = unassignedMatches.find(g => normalizeString(g.nombre_invitado) === normalizedInput);
+                            if (exactMatch) {
+                                selectedGuest = exactMatch;
+                            } else {
+                                // Si aún es ambiguo, seleccionamos el primero disponible
+                                selectedGuest = unassignedMatches[0];
+                            }
+                        } else {
+                            setErrorMsg('Todas las invitaciones asociadas a este nombre ya fueron confirmadas previa y separadamente.');
+                            setIsSubmitting(false);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            const data = selectedGuest;
+            const finalName = shouldUpdateName ? trimmedNombre : data.nombre_invitado;
+
+            // -------------------------------------------------------------
+            // PROCESAMIENTO DE ESTADO Y PERSISTENCIA EN SUPABASE
+            // -------------------------------------------------------------
+
+            // CASO A: EL INVITADO YA HABÍA RESPONDIDO CON ESTE TELÉFONO
+            if (data.telefono && cleanPhone(data.telefono) === cleanInputPhone) {
+                // Actualizar estado si la fecha límite aún está vigente
                 if (data.asistira !== willAttend && !isDeadlinePassed) {
                     await supabase
                         .from('rsvps')
-                        .update({ asistira: willAttend })
+                        .update({ 
+                            asistira: willAttend,
+                            nombre_invitado: finalName 
+                        })
                         .eq('id', data.id);
                     data.asistira = willAttend;
                 }
 
-                setSubmittedData({ ...data, telefono: telefono.trim() });
+                setSubmittedData({ ...data, nombre_invitado: finalName, telefono: cleanInputPhone });
                 setIsRetrieval(true);
                 setIsSubmitting(false);
                 return;
             }
 
-            // 5. CASO B: NUEVA RESPUESTA FUERA DE PLAZO
+            // CASO B: NUEVA RESPUESTA PERO EL PLAZO YA VENCIÓ
             if (isDeadlinePassed) {
                 setErrorMsg(`El plazo para confirmar asistencia finalizó el ${rsvp.displayDeadline}. Por favor, comunícate directamente con los novios.`);
                 setIsSubmitting(false);
                 return;
             }
 
-            // 6. CASO C: REGISTRO EXITOSO DENTRO DE PLAZO
+            // CASO C: PRIMERA RESPUESTA DENTRO DE PLAZO
+            const updatePayload = {
+                asistira: willAttend,
+                telefono: cleanInputPhone
+            };
+
+            if (shouldUpdateName) {
+                updatePayload.nombre_invitado = finalName;
+            }
+
             const { error: updateError } = await supabase
                 .from('rsvps')
-                .update({ 
-                    asistira: willAttend,
-                    telefono: telefono.trim() 
-                })
-                .eq('id', data.id); 
+                .update(updatePayload)
+                .eq('id', data.id);
 
             if (updateError) {
-                setErrorMsg('Hubo un problema al registrar tu respuesta. Por favor inténtalo de nuevo.');
+                setErrorMsg('Hubo un problema al guardar tu respuesta. Por favor inténtalo de nuevo.');
                 setIsSubmitting(false);
                 return;
             }
 
-            setSubmittedData({ ...data, asistira: willAttend, telefono: telefono.trim() });
+            setSubmittedData({ ...data, nombre_invitado: finalName, asistira: willAttend, telefono: cleanInputPhone });
 
         } catch (err) {
-            setErrorMsg('Ocurrió un error de red. Por favor revisa tu conexión a internet.');
+            setErrorMsg('Ocurrió un error de conexión a internet. Por favor reintenta.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // VISTA DE RESPUESTA REGISTRADA (ÉXITO O NO ASISTIRÁ)
+    // VISTA DE RESPUESTA REGISTRADA (PASE QR O AGRADECIMIENTO)
     if (submittedData) {
         return (
             <section className="min-h-screen flex items-center justify-center py-20 bg-[#1a1a1a] relative overflow-hidden">
@@ -201,7 +272,7 @@ export default function RSVPForm() {
                                     </span>
                                 </div>
                                 <h2 className="text-3xl font-playfair text-white mt-4 mb-1">Pase de Invitado</h2>
-                                <p className="text-[#d4af37] text-xs uppercase tracking-widest">Boda de Renato & Debora</p>
+                                <p className="text-[#d4af37] text-xs uppercase tracking-widest">Boda de Renato & Débora</p>
                             </div>
 
                             <div className="p-8 text-center space-y-6 ml-2">
@@ -248,7 +319,7 @@ export default function RSVPForm() {
 
                             <div className="space-y-2">
                                 <h2 className="text-2xl font-playfair text-white">Respuesta Registrada</h2>
-                                <p className="text-xs uppercase tracking-widest text-[#d4af37]">Boda de Renato & Debora</p>
+                                <p className="text-xs uppercase tracking-widest text-[#d4af37]">Boda de Renato & Débora</p>
                             </div>
 
                             <div className="py-4 border-y border-white/10 space-y-2">

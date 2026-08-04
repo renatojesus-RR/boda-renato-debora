@@ -22,45 +22,53 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // 1. Manejo del Login por PIN
-  const handlePinSubmit = (e) => {
+  const handlePinSubmit = async (e) => {
     e.preventDefault();
-    const correctPin = settings.admin?.pin || '2026';
-    if (pinInput.trim() === correctPin) {
-      setIsAuthenticated(true);
-      setPinError(false);
-      fetchData();
-    } else {
+    setLoading(true);
+    setPinError(false);
+
+    try {
+      // Petición POST al endpoint del servidor
+      const res = await fetch('/api/admin-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput.trim() }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        setRsvps(result.rsvps || []);
+        setSongRequests(result.songRequests || []);
+        setIsAuthenticated(true);
+      } else {
+        setPinError(true);
+        setPinInput('');
+      }
+    } catch (err) {
       setPinError(true);
-      setPinInput('');
+    } finally {
+      setLoading(false);
     }
   };
 
   // 2. Cargar Datos desde Supabase
   const fetchData = async () => {
+    if (!isAuthenticated) return;
     setLoading(true);
     try {
-      // Cargar RSVPs
-      const { data: rsvpData, error: rsvpErr } = await supabase
-        .from('rsvps')
-        .select('*')
-        .order('nombre_invitado', { ascending: true });
-
-      if (!rsvpErr && rsvpData) {
-        setRsvps(rsvpData);
+      const res = await fetch('/api/admin-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setRsvps(result.rsvps || []);
+        setSongRequests(result.songRequests || []);
       }
-
-      // Cargar Sugerencias de Canciones
-      const { data: songData, error: songErr } = await supabase
-        .from('song_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!songErr && songData) {
-        setSongRequests(songData);
-      }
-
     } catch (err) {
-      console.error('Error al cargar datos del dashboard:', err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
