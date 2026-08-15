@@ -1,11 +1,16 @@
 'use client'
 
+import { useSearchParams } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfettiExplosion from 'react-confetti-explosion';
 import settings from '../config/settings';
 
 export default function Countdown() {
+
+  const searchParams = useSearchParams();
+  const simularBoda = searchParams.get('simular') === 'boda';
+
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -29,6 +34,11 @@ export default function Countdown() {
   };
 
   useEffect(() => {
+    // Si la URL tiene ?simular=boda, forzamos el estado a true
+    if (simularBoda) {
+      setIsWeddingDay(true);
+      return; // Detenemos el reloj normal
+    }
     setMounted(true);
     const calculateTimeLeft = () => {
       const weddingDate = new Date(`${settings.wedding.date}T${settings.wedding.ceremony.time}:00`).getTime();

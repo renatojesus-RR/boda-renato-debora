@@ -91,8 +91,8 @@ const settings = {
   ],
 
   rsvp: { 
-    deadline: "2026-08-15",               // Fecha para evaluación técnica YYYY-MM-DD
-    displayDeadline: "15 de agosto de 2026" // Texto legible que se muestra al usuario
+    deadline: "2026-08-20",               // Fecha para evaluación técnica YYYY-MM-DD
+    displayDeadline: "20 de agosto de 2026" // Texto legible que se muestra al usuario
   },
 
  gallery: [

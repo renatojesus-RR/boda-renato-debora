@@ -70,6 +70,18 @@ export async function POST(request) {
 
     return NextResponse.json({ rsvps, songRequests });
 
+    // ACCIÓN: MARCAR INGRESO (CHECK-IN) EN LA PUERTA
+    if (action === 'check_in_guest') {
+      const { data, error } = await supabaseAdmin
+        .from('rsvps')
+        .update({ ingreso_confirmado: true })
+        .eq('id', guestId)
+        .select();
+
+      if (error) return NextResponse.json({ error: 'Error al procesar el ingreso' }, { status: 500 });
+      return NextResponse.json({ success: true, updatedGuest: data[0] });
+    }
+
   } catch (error) {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
