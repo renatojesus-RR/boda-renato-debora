@@ -1,16 +1,11 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfettiExplosion from 'react-confetti-explosion';
 import settings from '../config/settings';
 
 export default function Countdown() {
-
-  const searchParams = useSearchParams();
-  const simularBoda = searchParams.get('simular') === 'boda';
-
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -23,23 +18,34 @@ export default function Countdown() {
 
   const handleCountdownClick = () => {
     // Trigger background music to play
-    window.dispatchEvent(new Event('playBackgroundMusic'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('playBackgroundMusic'));
+    }
   };
 
   const scrollToNext = () => {
-    const nextSection = document.querySelector('#wedding-details');
-    if (nextSection) {
-      nextSection.scrollIntoView({ behavior: 'smooth' });
+    if (typeof document !== 'undefined') {
+      const nextSection = document.querySelector('#wedding-details');
+      if (nextSection) {
+        nextSection.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   };
 
   useEffect(() => {
-    // Si la URL tiene ?simular=boda, forzamos el estado a true
-    if (simularBoda) {
-      setIsWeddingDay(true);
-      return; // Detenemos el reloj normal
-    }
     setMounted(true);
+
+    // 1. MÁQUINA DEL TIEMPO (SIMULADOR DE BODA)
+    // Leemos la URL nativamente para no romper el build de Vercel (Sin Suspense)
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('simular') === 'boda') {
+        setIsWeddingDay(true);
+        return; // Detenemos el reloj normal
+      }
+    }
+
+    // 2. LÓGICA NORMAL DEL CONTADOR
     const calculateTimeLeft = () => {
       const weddingDate = new Date(`${settings.wedding.date}T${settings.wedding.ceremony.time}:00`).getTime();
       const weddingEndDate = new Date(`${settings.wedding.date}T23:59:59`).getTime();
