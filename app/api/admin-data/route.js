@@ -25,7 +25,8 @@ export async function POST(request) {
           nombre_invitado: nombre.trim(),
           telefono: telefono ? telefono.trim() : null,
           numero_mesa: numero_mesa ? parseInt(numero_mesa) : null,
-          asistira: false
+          asistira: false,
+          ingreso_confirmado: false
         }])
         .select();
 
@@ -45,8 +46,21 @@ export async function POST(request) {
       if (error) return NextResponse.json({ error: 'Error al actualizar nombre' }, { status: 500 });
       return NextResponse.json({ success: true, updatedGuest: data[0] });
     }
+    
+    // ACCIÓN 3: EDITAR MESA DE INVITADO
+    if (action === 'edit_guest_table') {
+      const { numero_mesa } = guestData;
+      const { data, error } = await supabaseAdmin
+        .from('rsvps')
+        .update({ numero_mesa: numero_mesa })
+        .eq('id', guestId)
+        .select();
 
-    // ACCIÓN 3: ELIMINAR INVITADO
+      if (error) return NextResponse.json({ error: 'Error al actualizar mesa' }, { status: 500 });
+      return NextResponse.json({ success: true, updatedGuest: data[0] });
+    }
+
+    // ACCIÓN 4: ELIMINAR INVITADO
     if (action === 'delete_guest') {
       const { error } = await supabaseAdmin
         .from('rsvps')
@@ -55,6 +69,18 @@ export async function POST(request) {
 
       if (error) return NextResponse.json({ error: 'Error al eliminar invitado' }, { status: 500 });
       return NextResponse.json({ success: true, deletedId: guestId });
+    }
+
+    // ACCIÓN 5: MARCAR INGRESO (CHECK-IN) EN LA PUERTA
+    if (action === 'check_in_guest') {
+      const { data, error } = await supabaseAdmin
+        .from('rsvps')
+        .update({ ingreso_confirmado: true })
+        .eq('id', guestId)
+        .select();
+
+      if (error) return NextResponse.json({ error: 'Error al procesar el ingreso' }, { status: 500 });
+      return NextResponse.json({ success: true, updatedGuest: data[0] });
     }
 
     // CONSULTA GENERAL (LOGIN / REFRESH)
@@ -69,18 +95,6 @@ export async function POST(request) {
       .order('created_at', { ascending: false });
 
     return NextResponse.json({ rsvps, songRequests });
-
-    // ACCIÓN: MARCAR INGRESO (CHECK-IN) EN LA PUERTA
-    if (action === 'check_in_guest') {
-      const { data, error } = await supabaseAdmin
-        .from('rsvps')
-        .update({ ingreso_confirmado: true })
-        .eq('id', guestId)
-        .select();
-
-      if (error) return NextResponse.json({ error: 'Error al procesar el ingreso' }, { status: 500 });
-      return NextResponse.json({ success: true, updatedGuest: data[0] });
-    }
 
   } catch (error) {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
