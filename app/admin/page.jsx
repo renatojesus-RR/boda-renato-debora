@@ -6,12 +6,12 @@ import { Lock, Users, CheckCircle2, Clock, Music, Search, RefreshCw, Phone, Disc
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
 
-// 🔴 LIBRERÍAS DND-KIT PARA ARRASTRAR Y SOLTAR
+// LIBRERÍAS DND-KIT
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// 🔴 COMPONENTE INDIVIDUAL DE FOTO ARRASTRABLE
+// 🔴 1. COMPONENTE FOTO (PARCHADO PARA MÓVILES)
 const SortablePhoto = ({ img, onDelete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: img.id });
   
@@ -27,14 +27,13 @@ const SortablePhoto = ({ img, onDelete }) => {
       style={style} 
       className={`relative group aspect-square bg-black border-2 rounded-2xl overflow-hidden transition-all ${isDragging ? 'border-[#d4af37] scale-105 shadow-2xl opacity-90' : 'border-white/10 hover:border-white/30'}`}
     >
-      {/* Área invisible para arrastrar (Touch/Mouse) */}
-      <div {...attributes} {...listeners} className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors">
+      {/* 🛑 FIX MÓVIL: touch-none bloquea el scroll del celular al tocar esta área, permitiendo arrastrar */}
+      <div {...attributes} {...listeners} className="touch-none absolute inset-0 z-10 cursor-grab active:cursor-grabbing flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors">
         <GripVertical className={`w-8 h-8 text-white drop-shadow-md transition-opacity ${isDragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
       </div>
 
       <img src={img.url} alt="Gallery item" className="w-full h-full object-cover pointer-events-none" />
       
-      {/* Botón de eliminar (Aislado del drag & drop) */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex justify-end p-3 z-20 pointer-events-none">
          <button 
             onClick={(e) => { e.stopPropagation(); onDelete(img.id, img.url); }} 
@@ -57,7 +56,7 @@ export default function AdminDashboard() {
   // Estados de Datos
   const [rsvps, setRsvps] = useState([]);
   const [songRequests, setSongRequests] = useState([]);
-  const [galleryImages, setGalleryImages] = useState([]); // El array maestro de fotos
+  const [galleryImages, setGalleryImages] = useState([]);
   const [appConfig, setAppConfig] = useState({ rsvp_deadline: '', songs_unlocked: false, wa_message_confirmed: '', wa_message_pending: '' });
   const [loading, setLoading] = useState(false);
 
@@ -70,27 +69,28 @@ export default function AdminDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Formularios Invitados
+  // Formularios
   const [newGuestName, setNewGuestName] = useState('');
   const [newGuestPhone, setNewGuestPhone] = useState('');
   const [newGuestTable, setNewGuestTable] = useState('');
-  
-  // Formularios Configuración
   const [configDeadline, setConfigDeadline] = useState('');
   const [configSongs, setConfigSongs] = useState(false);
   const [configWaConfirmed, setConfigWaConfirmed] = useState('');
   const [configWaPending, setConfigWaPending] = useState('');
 
-  // Edición Inline
   const [editingPhoneId, setEditingPhoneId] = useState(null);
   const [tempPhone, setTempPhone] = useState('');
   const [editingNameId, setEditingNameId] = useState(null);
   const [tempName, setTempName] = useState('');
 
-  // 🔴 CONFIGURACIÓN DE SENSORES DND-KIT (Adaptado para Celulares)
+  // 🔴 2. SENSORES TÁCTILES AFINADOS PARA EXPERIENCIA MÓVIL
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Mouse
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }), // Celular: Mantén 200ms para mover (permite hacer scroll normal)
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), 
+    useSensor(TouchSensor, { 
+      // Delay de 250ms: El usuario debe mantener presionada la foto un cuarto de segundo 
+      // para arrastrarla. Si la toca rápido, puede hacer scroll normalmente.
+      activationConstraint: { delay: 250, tolerance: 5 } 
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
     } catch (err) { alert('Error de red'); } finally { setLoading(false); } 
   };
 
-  // 🔴 SUBIDA Y AUTO-INDEXADO DE GALERÍA
+  // 🔴 3. SUBIDA INMUNE A RENDERIZADOS DOBLES
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -198,44 +198,46 @@ export default function AdminDashboard() {
         const result = await res.json();
         
         if (res.ok && result.newImage) {
-          // 1. Insertamos la nueva foto de primera
-          setGalleryImages(prev => {
-             const newOrder = [result.newImage, ...prev];
+          // Extraemos la lógica fuera del setState para evitar peticiones duplicadas
+          const newOrder = [result.newImage, ...galleryImages];
+          setGalleryImages(newOrder); // 1. Actualiza UI
              
-             // 2. Disparamos un reordenamiento silencioso para asegurar la integridad de toda la base de datos
-             const reorderedPayload = newOrder.map((img, idx) => ({ id: img.id, sort_order: idx }));
-             fetch('/api/admin-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: pinInput, action: 'reorder_gallery', guestData: { reorderedPayload } })
-             });
-             
-             return newOrder;
+          // 2. Dispara backend ordenadamente
+          const reorderedPayload = newOrder.map((img, idx) => ({ id: img.id, sort_order: idx }));
+          fetch('/api/admin-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: pinInput, action: 'reorder_gallery', guestData: { reorderedPayload } })
           });
+          
         } else { alert('Error al subir la imagen al servidor'); }
       } catch (err) { alert('Error de conexión'); } finally { setLoading(false); }
     };
   };
 
-  // 🔴 LÓGICA DE ACTUALIZACIÓN DRAG & DROP
+  // 🔴 4. REORDENAMIENTO INMUNE A RENDERIZADOS DOBLES
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     if (active && over && active.id !== over.id) {
-      setGalleryImages((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over.id);
-        const newOrder = arrayMove(items, oldIndex, newIndex); // Librería reordena el array visualmente
-        
-        // Guardado silencioso en background
-        const reorderedPayload = newOrder.map((img, idx) => ({ id: img.id, sort_order: idx }));
-        fetch('/api/admin-data', {
+      // 1. Calculamos el nuevo estado usando la variable actual, no callbacks
+      const oldIndex = galleryImages.findIndex((i) => i.id === active.id);
+      const newIndex = galleryImages.findIndex((i) => i.id === over.id);
+      const newOrder = arrayMove(galleryImages, oldIndex, newIndex);
+      
+      // 2. Actualizamos la Interfaz visual inmediatamente
+      setGalleryImages(newOrder);
+      
+      // 3. Ejecutamos el guardado silencioso en background
+      const reorderedPayload = newOrder.map((img, idx) => ({ id: img.id, sort_order: idx }));
+      try {
+        await fetch('/api/admin-data', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pin: pinInput, action: 'reorder_gallery', guestData: { reorderedPayload } })
         });
-        
-        return newOrder;
-      });
+      } catch (e) {
+        console.error("Error guardando el nuevo orden", e);
+      }
     }
   };
 
@@ -461,7 +463,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* 🔴 TAB 3: GALLERY CMS CON DND-KIT (Arrastrar y Soltar) */}
+        {/* 🔴 TAB 3: GALLERY CMS CON DND-KIT PARCHADO */}
         {activeTab === 'gallery' && (
           <div className="space-y-6">
             <div className="bg-white/5 border border-dashed border-white/20 rounded-2xl p-8 text-center relative">
@@ -497,7 +499,7 @@ export default function AdminDashboard() {
 
       </main>
 
-      {/* 🔴 MODAL CONFIGURACIÓN CON MENSAJES DE WHATSAPP */}
+      {/* MODAL CONFIGURACIÓN CON MENSAJES DE WHATSAPP */}
       <AnimatePresence>
         {showConfigModal && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
