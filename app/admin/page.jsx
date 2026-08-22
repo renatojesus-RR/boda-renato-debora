@@ -2,32 +2,69 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Users, CheckCircle2, Clock, Music, Search, RefreshCw, Phone, Disc, Link as LinkIcon, ShieldAlert, MessageCircle, UserPlus, X, Edit3, Trash2, Check, UserCheck, Map, QrCode, Settings, Image as ImageIcon, UploadCloud, SortDesc } from 'lucide-react';
+import { Lock, Users, CheckCircle2, Clock, Music, Search, RefreshCw, Phone, Disc, Link as LinkIcon, ShieldAlert, MessageCircle, UserPlus, X, Edit3, Trash2, Check, UserCheck, Map, QrCode, Settings, Image as ImageIcon, UploadCloud, GripVertical } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
+
+// 🔴 LIBRERÍAS DND-KIT PARA ARRASTRAR Y SOLTAR
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// 🔴 COMPONENTE INDIVIDUAL DE FOTO ARRASTRABLE
+const SortablePhoto = ({ img, onDelete }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: img.id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className={`relative group aspect-square bg-black border-2 rounded-2xl overflow-hidden transition-all ${isDragging ? 'border-[#d4af37] scale-105 shadow-2xl opacity-90' : 'border-white/10 hover:border-white/30'}`}
+    >
+      {/* Área invisible para arrastrar (Touch/Mouse) */}
+      <div {...attributes} {...listeners} className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors">
+        <GripVertical className={`w-8 h-8 text-white drop-shadow-md transition-opacity ${isDragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+      </div>
+
+      <img src={img.url} alt="Gallery item" className="w-full h-full object-cover pointer-events-none" />
+      
+      {/* Botón de eliminar (Aislado del drag & drop) */}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex justify-end p-3 z-20 pointer-events-none">
+         <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(img.id, img.url); }} 
+            className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm transition-colors pointer-events-auto shadow-lg" 
+            title="Eliminar foto"
+         >
+            <Trash2 className="w-4 h-4" />
+         </button>
+      </div>
+    </div>
+  );
+};
+
 
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  // Estado para el Drag & Drop de Galería
-  const [draggedIdx, setDraggedIdx] = useState(null);
-
   // Estados de Datos
   const [rsvps, setRsvps] = useState([]);
   const [songRequests, setSongRequests] = useState([]);
-  const [galleryImages, setGalleryImages] = useState([]);
+  const [galleryImages, setGalleryImages] = useState([]); // El array maestro de fotos
   const [appConfig, setAppConfig] = useState({ rsvp_deadline: '', songs_unlocked: false, wa_message_confirmed: '', wa_message_pending: '' });
   const [loading, setLoading] = useState(false);
 
-  // Filtros y Pestañas ('rsvps' | 'songs' | 'gallery')
+  // Filtros y Pestañas
   const [activeTab, setActiveTab] = useState('rsvps');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Ordenamiento de Galería
-  const [gallerySort, setGallerySort] = useState('newest');
 
   // Modales
   const [showAddModal, setShowAddModal] = useState(false);
@@ -49,6 +86,13 @@ export default function AdminDashboard() {
   const [tempPhone, setTempPhone] = useState('');
   const [editingNameId, setEditingNameId] = useState(null);
   const [tempName, setTempName] = useState('');
+
+  // 🔴 CONFIGURACIÓN DE SENSORES DND-KIT (Adaptado para Celulares)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Mouse
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }), // Celular: Mantén 200ms para mover (permite hacer scroll normal)
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const handlePinSubmit = async (e) => {
     e.preventDefault();
@@ -105,49 +149,6 @@ export default function AdminDashboard() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  // 🔴 FUNCIONES DRAG & DROP PARA LA GALERÍA
-  const handleDragStart = (e, index) => {
-    setDraggedIdx(index);
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const handleDragOver = (e, index) => {
-    e.preventDefault(); // Necesario para permitir el "drop"
-  };
-
-  const handleDrop = async (e, targetIdx) => {
-    e.preventDefault();
-    if (draggedIdx === null || draggedIdx === targetIdx) return;
-
-    // 1. Reordenar el array localmente
-    const newImages = [...galleryImages];
-    const [draggedItem] = newImages.splice(draggedIdx, 1);
-    newImages.splice(targetIdx, 0, draggedItem);
-    
-    // 2. Actualizar la interfaz instantáneamente (Optimistic UI)
-    setGalleryImages(newImages);
-    setDraggedIdx(null);
-
-    // 3. Crear el payload con los nuevos índices
-    const reorderedPayload = newImages.map((img, idx) => ({ id: img.id, sort_order: idx }));
-
-    // 4. Enviar a Supabase silenciosamente
-    try {
-      await fetch('/api/admin-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pin: pinInput,
-          action: 'reorder_gallery',
-          guestData: { reorderedPayload }
-        })
-      });
-    } catch (err) {
-      console.error("Error al guardar el nuevo orden", err);
-    }
-  };
-
-  // 🔴 GUARDAR CONFIGURACIÓN CMS Y WHATSAPP
   const handleSaveConfig = async (e) => { 
     e.preventDefault(); 
     setLoading(true); 
@@ -158,25 +159,18 @@ export default function AdminDashboard() {
         body: JSON.stringify({ 
           pin: pinInput, 
           action: 'update_config', 
-          guestData: { 
-            rsvp_deadline: configDeadline, 
-            songs_unlocked: configSongs,
-            wa_message_confirmed: configWaConfirmed,
-            wa_message_pending: configWaPending
-          } 
+          guestData: { rsvp_deadline: configDeadline, songs_unlocked: configSongs, wa_message_confirmed: configWaConfirmed, wa_message_pending: configWaPending } 
         }) 
       }); 
       const result = await res.json(); 
       if (res.ok && result.updatedConfig) { 
         setAppConfig(result.updatedConfig); 
         setShowConfigModal(false); 
-      } else { 
-        alert('Error al guardar configuración'); 
-      } 
+      } else { alert('Error al guardar configuración'); } 
     } catch (err) { alert('Error de red'); } finally { setLoading(false); } 
   };
 
-  // CMS: SUBIR GALERÍA
+  // 🔴 SUBIDA Y AUTO-INDEXADO DE GALERÍA
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -202,17 +196,47 @@ export default function AdminDashboard() {
           })
         });
         const result = await res.json();
+        
         if (res.ok && result.newImage) {
-          setGalleryImages(prev => [result.newImage, ...prev]);
-        } else {
-          alert('Error al subir la imagen al servidor');
-        }
-      } catch (err) {
-        alert('Error de conexión');
-      } finally {
-        setLoading(false);
-      }
+          // 1. Insertamos la nueva foto de primera
+          setGalleryImages(prev => {
+             const newOrder = [result.newImage, ...prev];
+             
+             // 2. Disparamos un reordenamiento silencioso para asegurar la integridad de toda la base de datos
+             const reorderedPayload = newOrder.map((img, idx) => ({ id: img.id, sort_order: idx }));
+             fetch('/api/admin-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: pinInput, action: 'reorder_gallery', guestData: { reorderedPayload } })
+             });
+             
+             return newOrder;
+          });
+        } else { alert('Error al subir la imagen al servidor'); }
+      } catch (err) { alert('Error de conexión'); } finally { setLoading(false); }
     };
+  };
+
+  // 🔴 LÓGICA DE ACTUALIZACIÓN DRAG & DROP
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    if (active && over && active.id !== over.id) {
+      setGalleryImages((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        const newOrder = arrayMove(items, oldIndex, newIndex); // Librería reordena el array visualmente
+        
+        // Guardado silencioso en background
+        const reorderedPayload = newOrder.map((img, idx) => ({ id: img.id, sort_order: idx }));
+        fetch('/api/admin-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pinInput, action: 'reorder_gallery', guestData: { reorderedPayload } })
+        });
+        
+        return newOrder;
+      });
+    }
   };
 
   const handleDeleteImage = async (id, url) => {
@@ -228,9 +252,7 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         setGalleryImages(prev => prev.filter(img => img.id !== id));
-      } else {
-        alert('Error al intentar borrar la imagen');
-      }
+      } else { alert('Error al intentar borrar la imagen'); }
     } catch (err) { alert('Error de conexión'); } finally { setLoading(false); }
   };
 
@@ -254,32 +276,19 @@ export default function AdminDashboard() {
     return matchesSearch;
   });
 
-  // Ordenamiento Dinámico de Galería
-  const sortedGallery = [...galleryImages].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime();
-    const dateB = new Date(b.created_at).getTime();
-    return gallerySort === 'newest' ? dateB - dateA : dateA - dateB;
-  });
-
   const cleanName = (str) => str ? str.replace(/\([^)]*\)/g, '').trim() : '';
   
-  // 🔴 CONSTRUCTOR DINÁMICO DE WHATSAPP CON VARIABLES
   const buildWhatsappUrl = (phone, rawName, asistira) => {
     if (!phone) return null;
     const fullPhone = phone.replace(/\D/g, '').length === 9 ? `51${phone.replace(/\D/g, '')}` : phone.replace(/\D/g, '');
     const siteUrl = "https://bodarenatoydebora.vercel.app";
     const guestName = cleanName(rawName);
 
-    // Leer desde la config o usar el default si está vacío
     let messageTemplate = asistira 
         ? (appConfig.wa_message_confirmed || `¡Hola [NOMBRE]! 💍 Te compartimos el enlace a la web de nuestra boda para que consultes tu pase VIP con código QR o veas la ubicación del evento: [LINK] ¡Esperamos verte pronto! - Renato & Débora`)
         : (appConfig.wa_message_pending || `¡Hola [NOMBRE]! ✨ Te compartimos con mucho cariño la invitación a nuestra boda: [LINK]. Les agradeceremos confirmar su asistencia a través del enlace cuando puedan. ¡Un fuerte abrazo! - Renato & Débora`);
 
-    // Inyectar las variables
-    let finalMessage = messageTemplate
-        .replace(/\[NOMBRE\]/g, guestName)
-        .replace(/\[LINK\]/g, siteUrl);
-
+    let finalMessage = messageTemplate.replace(/\[NOMBRE\]/g, guestName).replace(/\[LINK\]/g, siteUrl);
     return `https://wa.me/${fullPhone}?text=${encodeURIComponent(finalMessage)}`;
   };
 
@@ -452,7 +461,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* 🔴 TAB 3: GALLERY CMS (CON DRAG & DROP) */}
+        {/* 🔴 TAB 3: GALLERY CMS CON DND-KIT (Arrastrar y Soltar) */}
         {activeTab === 'gallery' && (
           <div className="space-y-6">
             <div className="bg-white/5 border border-dashed border-white/20 rounded-2xl p-8 text-center relative">
@@ -461,7 +470,7 @@ export default function AdminDashboard() {
                </div>
                <h3 className="text-lg font-playfair text-white mb-2">Administrador de Galería</h3>
                <p className="text-xs text-white/50 mb-6 max-w-sm mx-auto">
-                 Sube las fotos y <strong className="text-[#d4af37]">arrástralas para cambiar el orden</strong> en el carrusel de la página principal.
+                 Sube las fotos y <strong className="text-[#d4af37]">arrástralas libremente</strong> para cambiar el orden en que se mostrarán en la página principal.
                </p>
                
                <label className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-[#d4af37] hover:bg-[#b8952b] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg">
@@ -471,46 +480,18 @@ export default function AdminDashboard() {
                </label>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-               {galleryImages.map((img, index) => (
-                  <div 
-                    key={img.id} 
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDrop={(e) => handleDrop(e, index)}
-                    className={`relative group aspect-square bg-black border-2 rounded-2xl overflow-hidden cursor-grab active:cursor-grabbing transition-all ${draggedIdx === index ? 'opacity-50 border-[#d4af37] scale-95' : 'border-white/10 hover:border-white/30'}`}
-                  >
-                     {/* Indicador visual de mover */}
-                     <div className="absolute top-2 left-2 z-10 p-1.5 bg-black/60 rounded-md backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="flex gap-0.5">
-                          <div className="w-1 h-1 bg-white/70 rounded-full" /><div className="w-1 h-1 bg-white/70 rounded-full" />
-                        </div>
-                        <div className="flex gap-0.5 mt-0.5">
-                          <div className="w-1 h-1 bg-white/70 rounded-full" /><div className="w-1 h-1 bg-white/70 rounded-full" />
-                        </div>
-                        <div className="flex gap-0.5 mt-0.5">
-                          <div className="w-1 h-1 bg-white/70 rounded-full" /><div className="w-1 h-1 bg-white/70 rounded-full" />
-                        </div>
-                     </div>
-
-                     <img src={img.url} alt="Boda Renato y Débora" className="w-full h-full object-cover pointer-events-none" />
-                     
-                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
-                         <button 
-                            onClick={() => handleDeleteImage(img.id, img.url)} 
-                            className="self-end p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm transition-colors z-20" 
-                            title="Eliminar foto"
-                         >
-                            <Trash2 className="w-4 h-4" />
-                         </button>
-                     </div>
-                  </div>
-               ))}
-               {galleryImages.length === 0 && (
-                 <div className="col-span-full py-12 text-center text-xs text-white/30 italic">Aún no hay fotos en la galería. Sube tus primeras imágenes para armar el carrusel.</div>
-               )}
-            </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={galleryImages.map(img => img.id)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {galleryImages.map(img => (
+                    <SortablePhoto key={img.id} img={img} onDelete={handleDeleteImage} />
+                  ))}
+                  {galleryImages.length === 0 && (
+                    <div className="col-span-full py-12 text-center text-xs text-white/30 italic">Aún no hay fotos en la galería. Sube tus primeras imágenes para armar el carrusel.</div>
+                  )}
+                </div>
+              </SortableContext>
+            </DndContext>
           </div>
         )}
 
@@ -527,14 +508,12 @@ export default function AdminDashboard() {
               </div>
 
               <form onSubmit={handleSaveConfig} className="space-y-6 text-xs">
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[#d4af37] uppercase tracking-wider mb-2 font-semibold">Cierre de Confirmaciones (RSVP)</label>
                     <input type="date" required value={configDeadline} onChange={(e) => setConfigDeadline(e.target.value)} className="w-full px-4 py-3 bg-black/60 border border-white/10 rounded-xl text-white focus:border-[#d4af37] outline-none" />
                     <p className="text-[10px] text-white/40 mt-1">Bloquea el formulario web luego de esta fecha.</p>
                   </div>
-
                   <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between h-full">
                     <div>
                       <p className="font-semibold text-white uppercase tracking-wider">Liberar Canciones</p>
@@ -555,7 +534,6 @@ export default function AdminDashboard() {
                     <label className="block text-white/80 uppercase tracking-wider mb-2 font-medium">Mensaje para Pendientes (No han confirmado)</label>
                     <textarea rows="3" value={configWaPending} onChange={(e) => setConfigWaPending(e.target.value)} className="w-full px-4 py-3 bg-black/60 border border-white/10 rounded-xl text-white focus:border-[#d4af37] outline-none leading-relaxed resize-none" placeholder="Escribe tu mensaje aquí..." />
                   </div>
-                  
                   <div>
                     <label className="block text-emerald-400/80 uppercase tracking-wider mb-2 font-medium">Mensaje para Confirmados (Pase VIP)</label>
                     <textarea rows="3" value={configWaConfirmed} onChange={(e) => setConfigWaConfirmed(e.target.value)} className="w-full px-4 py-3 bg-black/60 border border-white/10 rounded-xl text-white focus:border-[#d4af37] outline-none leading-relaxed resize-none" placeholder="Escribe tu mensaje aquí..." />
@@ -572,7 +550,7 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
-      {/* MODAL NUEVO INVITADO (Mantenlo intacto) */}
+      {/* MODAL NUEVO INVITADO */}
       <AnimatePresence>
         {showAddModal && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
