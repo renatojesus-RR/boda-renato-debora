@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, QrCode, Search, CheckCircle2, AlertTriangle, ShieldCheck, UserCheck, XCircle } from 'lucide-react';
+import { ShieldCheck, QrCode, Search, CheckCircle2, AlertTriangle, UserCheck, XCircle } from 'lucide-react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 
 export default function SecurityScanner() {
@@ -13,11 +13,9 @@ export default function SecurityScanner() {
   const [guests, setGuests] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Estado para la alerta de escaneo
-  const [scanResult, setScanResult] = useState(null); // { type: 'success' | 'used' | 'not_found', guestName: '', mesa: '' }
+  const [scanResult, setScanResult] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Login y Fetch Inicial
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -28,7 +26,6 @@ export default function SecurityScanner() {
       });
       const result = await res.json();
       if (res.ok) {
-        // Solo traemos a los que confirmaron que SÍ asisten
         const confirmedOnly = result.rsvps.filter(g => g.asistira);
         setGuests(confirmedOnly);
         setIsAuthenticated(true);
@@ -40,7 +37,6 @@ export default function SecurityScanner() {
     }
   };
 
-  // Función principal de Check-In (Por QR o Manual)
   const processCheckIn = async (guestId) => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -59,24 +55,16 @@ export default function SecurityScanner() {
       return;
     }
 
-    // Si todo está bien, lo marcamos en la base de datos
     try {
       const res = await fetch('/api/admin-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pin: pinInput,
-          action: 'check_in_guest',
-          guestId: guest.id
-        }),
+        body: JSON.stringify({ pin: pinInput, action: 'check_in_guest', guestId: guest.id }),
       });
 
       if (res.ok) {
         setScanResult({ type: 'success', guestName: guest.nombre_invitado, mesa: guest.numero_mesa });
-        // Actualizar el estado local para reflejar que ya entró
         setGuests(prev => prev.map(g => g.id === guestId ? { ...g, ingreso_confirmado: true } : g));
-        
-        // Limpiar el mensaje de éxito después de 3 segundos para el siguiente escaneo
         setTimeout(() => { setScanResult(null); setIsProcessing(false); }, 3000);
       }
     } catch (err) {
@@ -85,7 +73,6 @@ export default function SecurityScanner() {
     }
   };
 
-  // Lector de la cámara
   const handleScan = (detectedCodes) => {
     if (detectedCodes && detectedCodes.length > 0) {
       const scannedId = detectedCodes[0].rawValue;
@@ -97,11 +84,11 @@ export default function SecurityScanner() {
     g.nombre_invitado?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // VISTA 1: LOGIN
+  // VISTA LOGIN
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="bg-white/5 border border-white/10 p-8 rounded-3xl w-full max-w-sm text-center">
+        <form onSubmit={handleLogin} className="bg-white/5 border border-white/10 p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl">
           <ShieldCheck className="w-12 h-12 text-[#d4af37] mx-auto mb-4" />
           <h1 className="text-xl text-white font-playfair mb-6">Seguridad - Acceso</h1>
           <input
@@ -111,14 +98,15 @@ export default function SecurityScanner() {
             onChange={(e) => setPinInput(e.target.value)}
             placeholder="PIN de Seguridad"
             className="w-full text-center py-3 bg-black/60 border border-white/10 rounded-xl text-white mb-4 outline-none focus:border-[#d4af37]"
+            autoFocus
           />
-          <button type="submit" className="w-full py-3 bg-[#722F37] text-white rounded-xl font-semibold uppercase tracking-wider text-xs">Ingresar</button>
+          <button type="submit" className="w-full py-3 bg-[#722F37] text-white rounded-xl font-semibold uppercase tracking-wider text-xs transition-colors hover:bg-[#8b3843]">Ingresar</button>
         </form>
       </div>
     );
   }
 
-  // VISTA 2: PANEL DE CONTROL DE PUERTA
+  // VISTA PANEL
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       <header className="bg-[#1a1a1a] p-4 border-b border-white/10 flex justify-between items-center sticky top-0 z-40">
@@ -135,26 +123,22 @@ export default function SecurityScanner() {
       </header>
 
       <div className="p-4 max-w-md mx-auto">
-        {/* Selector de Modo */}
         <div className="flex bg-white/5 p-1 rounded-xl mb-6">
           <button 
             onClick={() => setActiveTab('scanner')}
-            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-semibold transition-colors ${activeTab === 'scanner' ? 'bg-[#d4af37] text-black' : 'text-white/50'}`}
+            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-semibold transition-colors ${activeTab === 'scanner' ? 'bg-[#d4af37] text-black' : 'text-white/50 hover:text-white'}`}
           >
             <QrCode className="w-4 h-4" /> Escáner QR
           </button>
           <button 
             onClick={() => setActiveTab('manual')}
-            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-semibold transition-colors ${activeTab === 'manual' ? 'bg-[#722F37] text-white' : 'text-white/50'}`}
+            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-semibold transition-colors ${activeTab === 'manual' ? 'bg-[#722F37] text-white' : 'text-white/50 hover:text-white'}`}
           >
             <UserCheck className="w-4 h-4" /> Lista Manual
           </button>
         </div>
 
-        {/* CONTENEDOR PRINCIPAL */}
         <div className="relative">
-          
-          {/* OVERLAY DE RESULTADOS (Se superpone a la cámara o lista) */}
           <AnimatePresence>
             {scanResult && (
               <motion.div 
@@ -171,7 +155,6 @@ export default function SecurityScanner() {
                     {scanResult.mesa && <p className="text-emerald-300 font-bold text-lg">MESA {scanResult.mesa}</p>}
                   </div>
                 )}
-
                 {scanResult.type === 'used' && (
                   <div className="w-full p-6 bg-red-500/20 border border-red-500/50 rounded-2xl text-center text-red-400 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
                     <AlertTriangle className="w-16 h-16 mx-auto mb-4" />
@@ -180,19 +163,17 @@ export default function SecurityScanner() {
                     <p className="text-xs text-red-300/70">Este QR ya registró ingreso.</p>
                   </div>
                 )}
-
                 {scanResult.type === 'not_found' && (
                   <div className="w-full p-6 bg-amber-500/20 border border-amber-500/50 rounded-2xl text-center text-amber-400">
                     <XCircle className="w-16 h-16 mx-auto mb-4" />
                     <p className="font-bold text-xl uppercase tracking-wider mb-2">QR Inválido</p>
-                    <p className="text-xs text-amber-300/70">Este código no pertenece a la base de datos del evento.</p>
+                    <p className="text-xs text-amber-300/70">Este código no pertenece al evento.</p>
                   </div>
                 )}
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* TAB 1: ESCÁNER */}
           {activeTab === 'scanner' && (
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden aspect-[3/4] sm:aspect-square flex flex-col items-center justify-center relative">
                {!scanResult ? (
@@ -204,7 +185,6 @@ export default function SecurityScanner() {
                       styles={{ container: { width: '100%', height: '100%' } }}
                    />
                    <div className="absolute inset-0 pointer-events-none border-[40px] border-black/40">
-                      {/* Marco simulado para el visor */}
                       <div className="absolute inset-0 border-2 border-[#d4af37]/50 rounded-xl m-8" />
                    </div>
                  </div>
@@ -214,7 +194,6 @@ export default function SecurityScanner() {
             </div>
           )}
 
-          {/* TAB 2: LISTA MANUAL DE CONTINGENCIA */}
           {activeTab === 'manual' && (
             <div className="space-y-4">
               <div className="relative">
@@ -236,7 +215,7 @@ export default function SecurityScanner() {
                       {guest.numero_mesa ? (
                         <p className="text-xs text-[#d4af37]">Mesa {guest.numero_mesa}</p>
                       ) : (
-                        <p className="text-xs text-white/30">Sin mesa asignada</p>
+                        <p className="text-xs text-white/30">Sin mesa</p>
                       )}
                     </div>
                     

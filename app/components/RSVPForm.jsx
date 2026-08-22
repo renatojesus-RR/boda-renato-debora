@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Check, AlertCircle, Phone, User, QrCode, ShieldCheck, Calendar, Clock, X, HeartOff } from 'lucide-react';
+import { Search, Check, AlertCircle, Phone, User, QrCode, ShieldCheck, Calendar, Clock, X, HeartOff, MessageCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import QRCode from 'react-qr-code';
 import settings from '../config/settings';
@@ -60,15 +60,48 @@ export default function RSVPForm() {
     const [errorMsg, setErrorMsg] = useState('');
     const [isRetrieval, setIsRetrieval] = useState(false);
 
+    // Estado dinámico para fecha límite desde Supabase
+    const [dynamicDeadline, setDynamicDeadline] = useState(null);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('app_config')
+                    .select('rsvp_deadline')
+                    .eq('id', 1)
+                    .single();
+
+                if (!error && data?.rsvp_deadline) {
+                    setDynamicDeadline(data.rsvp_deadline);
+                }
+            } catch (err) {
+                console.error("No se pudo consultar la configuración dinámica de fecha:", err);
+            }
+        };
+
+        fetchConfig();
+    }, []);
+
     // Lógica para verificar si la fecha límite ya venció
     const checkIsDeadlinePassed = () => {
-        if (!rsvp?.deadline) return false;
-        const deadlineDate = new Date(`${rsvp.deadline}T23:59:59`);
+        const targetDeadline = dynamicDeadline || rsvp?.deadline;
+        if (!targetDeadline) return false;
+        const deadlineDate = new Date(`${targetDeadline}T23:59:59`);
         const now = new Date();
         return now > deadlineDate;
     };
 
     const isDeadlinePassed = checkIsDeadlinePassed();
+
+    // Formatear texto de fecha límite
+    const getFormattedDeadline = () => {
+        if (!dynamicDeadline) return rsvp?.displayDeadline || 'Fecha límite por definir';
+        const [year, month, day] = dynamicDeadline.split('-');
+        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+        const monthName = months[parseInt(month, 10) - 1] || month;
+        return `${parseInt(day, 10)} de ${monthName} de ${year}`;
+    };
 
     const handleProcessRSVP = async (willAttend) => {
         setIsSubmitting(true);
@@ -120,10 +153,8 @@ export default function RSVPForm() {
                     selectedGuest = phoneMatch;
                     shouldUpdateName = true;
                 } else if (normMatchedName.includes(normInputName) || normInputName.includes(normMatchedName)) {
-                    // Si el teléfono coincide y el nombre es similar/mismo usuario consultando
                     selectedGuest = phoneMatch;
                 } else {
-                    // Teléfono registrado a otro nombre totalmente distinto
                     setErrorMsg(`Este número de celular ya está registrado a nombre de: "${getDisplayName(phoneMatch.nombre_invitado)}". Por favor verifica tus datos.`);
                     setIsSubmitting(false);
                     return;
@@ -154,24 +185,19 @@ export default function RSVPForm() {
                     selectedGuest = nameMatches[0];
                 } else {
                     // === RESOLUCIÓN DE HOMONIMIAS (MÁS DE 1 COINCIDENCIA DE NOMBRE) ===
-                    
-                    // A) ¿Alguno de los homónimos ya tiene este celular registrado?
                     const samePhoneMatch = nameMatches.find(g => cleanPhone(g.telefono) === cleanInputPhone);
                     if (samePhoneMatch) {
                         selectedGuest = samePhoneMatch;
                     } else {
-                        // B) Seleccionar la entrada de homónimo que aún NO tenga celular registrado (unassigned)
                         const unassignedMatches = nameMatches.filter(g => !g.telefono || cleanPhone(g.telefono) === '');
                         
                         if (unassignedMatches.length === 1) {
                             selectedGuest = unassignedMatches[0];
                         } else if (unassignedMatches.length > 1) {
-                            // C) Buscar coincidencia exacta de nombre
                             const exactMatch = unassignedMatches.find(g => normalizeString(g.nombre_invitado) === normalizedInput);
                             if (exactMatch) {
                                 selectedGuest = exactMatch;
                             } else {
-                                // Si aún es ambiguo, seleccionamos el primero disponible
                                 selectedGuest = unassignedMatches[0];
                             }
                         } else {
@@ -190,9 +216,8 @@ export default function RSVPForm() {
             // PROCESAMIENTO DE ESTADO Y PERSISTENCIA EN SUPABASE
             // -------------------------------------------------------------
 
-            // CASO A: EL INVITADO YA HABÍA RESPONDIDO CON ESTE TELÉFONO
+            // CASO A: EL INVITADO YA HABÍA RESPONDIDO CON ESTE TELÉFONO (CONSULTA / RECUPERACIÓN / ACTUALIZACIÓN)
             if (data.telefono && cleanPhone(data.telefono) === cleanInputPhone) {
-                // Actualizar estado si la fecha límite aún está vigente
                 if (data.asistira !== willAttend && !isDeadlinePassed) {
                     await supabase
                         .from('rsvps')
@@ -212,7 +237,7 @@ export default function RSVPForm() {
 
             // CASO B: NUEVA RESPUESTA PERO EL PLAZO YA VENCIÓ
             if (isDeadlinePassed) {
-                setErrorMsg(`El plazo para confirmar asistencia finalizó el ${rsvp.displayDeadline}. Por favor, comunícate directamente con los novios.`);
+                setErrorMsg(`El plazo para confirmar asistencia finalizó el ${getFormattedDeadline()}. Por favor, comunícate directamente con Renato o Débora.`);
                 setIsSubmitting(false);
                 return;
             }
@@ -338,7 +363,7 @@ export default function RSVPForm() {
                             </div>
 
                             <p className="text-[10px] text-[#faf8f3]/40 uppercase tracking-widest">
-                                Si tus planes cambian, puedes volver a ingresar para actualizar tu respuesta.
+                                Si tus planes cambian, puedes volver a ingresar para actualizar tu respuesta antes del cierre.
                             </p>
                         </div>
                     )}
@@ -366,7 +391,7 @@ export default function RSVPForm() {
                     {/* Insignia visual con la Fecha Límite */}
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 text-[#d4af37] text-xs uppercase tracking-widest font-medium mb-6">
                         <Calendar className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span>Confirmar antes del {rsvp.displayDeadline}</span>
+                        <span>Confirmar antes del {getFormattedDeadline()}</span>
                     </div>
 
                     <h2 className="text-4xl md:text-5xl font-playfair text-[#d4af37] mb-4">Confirmar Asistencia</h2>
@@ -374,14 +399,14 @@ export default function RSVPForm() {
                     
                     <p className="text-[#faf8f3]/70 font-light leading-relaxed text-sm md:text-base">
                         Ingresa tu nombre y celular para confirmar asistencia o avisarnos si no podrás acompañarnos. <br/>
-                        <span className="text-[#d4af37]">Si ya respondiste, ingresa los mismos datos para consultar o cambiar tu estado.</span>
+                        <span className="text-[#d4af37]">Si ya respondiste, ingresa los mismos datos para consultar tu pase VIP QR.</span>
                     </p>
 
                     {/* Aviso si la fecha límite ya expiró */}
                     {isDeadlinePassed && (
-                        <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-xl max-w-md mx-auto flex items-center justify-center gap-2">
+                        <div className="mt-4 p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-xl max-w-md mx-auto flex items-center justify-center gap-2 text-left">
                             <Clock className="w-4 h-4 text-amber-300 shrink-0" />
-                            <span>El plazo estándar ha finalizado ({rsvp.displayDeadline}). Solo está habilitada la consulta de respuestas previamente registradas.</span>
+                            <span>El plazo de confirmación ha finalizado ({getFormattedDeadline()}). Solo está habilitada la consulta de pases previamente registrados.</span>
                         </div>
                     )}
                 </div>
@@ -421,15 +446,15 @@ export default function RSVPForm() {
                                 required
                             />
                         </div>
-                        <p className="text-[10px] text-[#faf8f3]/40 mt-2 ml-1">Requerido como credencial para autenticar tu respuesta después.</p>
+                        <p className="text-[10px] text-[#faf8f3]/40 mt-2 ml-1">Requerido como credencial para autenticar o recuperar tu pase.</p>
                     </div>
 
                     <AnimatePresence>
                         {errorMsg && (
                             <motion.div 
                                 initial={{ opacity: 0, height: 0 }} 
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }} 
+                                exit={{ opacity: 0, height: 0 }} 
                                 className="flex items-center gap-3 text-red-300 bg-red-900/20 border border-red-500/20 p-4 rounded-xl"
                             >
                                 <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -438,44 +463,66 @@ export default function RSVPForm() {
                         )}
                     </AnimatePresence>
 
-                    {/* BOTONES DUALES: SÍ ASISTIRÉ / NO ASISTIRÉ */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                        <motion.button
-                            type="button"
-                            onClick={() => handleProcessRSVP(true)}
-                            disabled={isSubmitting}
-                            className="w-full py-4 bg-[#722F37] hover:bg-[#8b3843] text-white font-semibold text-xs tracking-[2px] uppercase rounded-xl transition-all duration-300 border border-[#722F37] hover:border-[#d4af37]/50 shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            {isSubmitting ? (
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <>
-                                    <Check className="w-4 h-4 text-[#d4af37]" />
-                                    Sí, Asistiré
-                                </>
-                            )}
-                        </motion.button>
+                    {/* LÓGICA DE BOTONES: ACTIVOS O BLOQUEADOS POR FECHA */}
+                    {isDeadlinePassed ? (
+                        <div className="pt-2 space-y-3">
+                            <motion.button
+                                type="button"
+                                onClick={() => handleProcessRSVP(true)}
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-[#722F37] hover:bg-[#8b3843] text-white font-semibold text-xs tracking-[2px] uppercase rounded-xl transition-all duration-300 border border-[#722F37] hover:border-[#d4af37]/50 shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                {isSubmitting ? (
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <Search className="w-4 h-4 text-[#d4af37]" />
+                                        Consultar / Ver Mi Pase QR
+                                    </>
+                                )}
+                            </motion.button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <motion.button
+                                type="button"
+                                onClick={() => handleProcessRSVP(true)}
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-[#722F37] hover:bg-[#8b3843] text-white font-semibold text-xs tracking-[2px] uppercase rounded-xl transition-all duration-300 border border-[#722F37] hover:border-[#d4af37]/50 shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                {isSubmitting ? (
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <Check className="w-4 h-4 text-[#d4af37]" />
+                                        Sí, Asistiré
+                                    </>
+                                )}
+                            </motion.button>
 
-                        <motion.button
-                            type="button"
-                            onClick={() => handleProcessRSVP(false)}
-                            disabled={isSubmitting}
-                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-semibold text-xs tracking-[2px] uppercase rounded-xl transition-all duration-300 border border-white/10 shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            {isSubmitting ? (
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <>
-                                    <X className="w-4 h-4 text-red-400/80" />
-                                    No Podré Asistir
-                                </>
-                            )}
-                        </motion.button>
-                    </div>
+                            <motion.button
+                                type="button"
+                                onClick={() => handleProcessRSVP(false)}
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-semibold text-xs tracking-[2px] uppercase rounded-xl transition-all duration-300 border border-white/10 shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                {isSubmitting ? (
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <X className="w-4 h-4 text-red-400/80" />
+                                        No Podré Asistir
+                                    </>
+                                )}
+                            </motion.button>
+                        </div>
+                    )}
 
                 </div>
             </div>

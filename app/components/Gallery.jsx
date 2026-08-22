@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
 import Image from 'next/image';
-import settings from '../config/settings';
+import { supabase } from '../../lib/supabase';
 import Lightbox from './shared/Lightbox';
 
 export default function Gallery() {
-  const photos = settings.gallery || [];
+  const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0); // 1 = Siguiente, -1 = Anterior
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -16,6 +16,25 @@ export default function Gallery() {
 
   useEffect(() => {
     setMounted(true);
+    
+    // 🔴 NUEVO: Cargar imágenes desde Supabase ordenadas por tu Drag & Drop
+    const fetchGallery = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('gallery_images')
+          .select('*')
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setPhotos(data);
+        }
+      } catch (err) {
+        console.error('Error cargando galería:', err);
+      }
+    };
+
+    fetchGallery();
   }, []);
 
   const slideNext = () => {
@@ -129,7 +148,7 @@ export default function Gallery() {
           </motion.div>
 
           {/* Carrusel Principal */}
-          {photos.length > 0 && (
+          {photos.length > 0 ? (
             <div className="relative max-w-3xl mx-auto">
               
               {/* Marco del Carrusel */}
@@ -146,8 +165,8 @@ export default function Gallery() {
                     onClick={openLightbox}
                   >
                     <Image
-                      src={photos[currentIndex].url}
-                      alt={photos[currentIndex].alt || `Foto ${currentIndex + 1}`}
+                      src={photos[currentIndex]?.url}
+                      alt={`Foto de la boda ${currentIndex + 1}`}
                       fill
                       priority
                       className="object-cover transition-transform duration-700 hover:scale-105"
@@ -193,7 +212,7 @@ export default function Gallery() {
                 <div className="flex justify-center items-center gap-3 mt-6 px-2 overflow-x-auto py-2">
                   {photos.map((photo, idx) => (
                     <button
-                      key={idx}
+                      key={photo.id || idx}
                       onClick={() => goToSlide(idx)}
                       className={`relative rounded-xl overflow-hidden transition-all duration-300 shrink-0 ${
                         currentIndex === idx
@@ -213,6 +232,10 @@ export default function Gallery() {
                 </div>
               )}
 
+            </div>
+          ) : (
+            <div className="text-center py-20 text-white/50 font-light italic">
+              {mounted ? "Cargando galería..." : ""}
             </div>
           )}
 
@@ -245,13 +268,15 @@ export default function Gallery() {
       </section>
 
       {/* Lightbox para pantalla completa al hacer clic */}
-      <Lightbox
-        images={photos}
-        currentIndex={currentIndex}
-        isOpen={isLightboxOpen}
-        onClose={closeLightbox}
-        onNavigate={(idx) => setCurrentIndex(idx)}
-      />
+      {photos.length > 0 && (
+        <Lightbox
+          images={photos}
+          currentIndex={currentIndex}
+          isOpen={isLightboxOpen}
+          onClose={closeLightbox}
+          onNavigate={(idx) => setCurrentIndex(idx)}
+        />
+      )}
     </>
   );
 }

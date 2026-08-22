@@ -17,25 +17,49 @@ export default function SongRequest() {
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Validación de Fecha Automática
   useEffect(() => {
     setMounted(true);
 
-    const checkActivation = () => {
-      if (!settings.songRequest?.enabled) return false;
-      
-      // Si está en modo prueba forzada
-      if (settings.songRequest?.forceShow) return true;
+    const checkActivation = async () => {
+      // 1. Verificación en modo prueba manual o deshabilitado estático
+      if (!settings.songRequest?.enabled) return;
+      if (settings.songRequest?.forceShow) {
+        setIsActive(true);
+        return;
+      }
 
-      const weddingTime = new Date(`${settings.wedding.date}T${settings.wedding.ceremony.time}:00`).getTime();
-      const activeStart = weddingTime - (24 * 60 * 60 * 1000); // 24 horas antes
-      const activeEnd = weddingTime + (18 * 60 * 60 * 1000);  // Hasta la mañana siguiente
-      const now = new Date().getTime();
+      // 2. Verificación dinámica desde la tabla app_config en Supabase
+      try {
+        const { data, error } = await supabase
+          .from('app_config')
+          .select('songs_unlocked')
+          .eq('id', 1)
+          .single();
 
-      return now >= activeStart && now <= activeEnd;
+        if (!error && data?.songs_unlocked) {
+          setIsActive(true);
+          return;
+        }
+      } catch (err) {
+        console.error("No se pudo consultar app_config, evaluando regla de fecha...", err);
+      }
+
+      // 3. Fallback automático por ventana de tiempo (24h antes del evento)
+      try {
+        const weddingTime = new Date(`${settings.wedding.date}T${settings.wedding.ceremony.time}:00`).getTime();
+        const activeStart = weddingTime - (24 * 60 * 60 * 1000);
+        const activeEnd = weddingTime + (18 * 60 * 60 * 1000);
+        const now = new Date().getTime();
+
+        if (now >= activeStart && now <= activeEnd) {
+          setIsActive(true);
+        }
+      } catch (e) {
+        setIsActive(false);
+      }
     };
 
-    setIsActive(checkActivation());
+    checkActivation();
   }, []);
 
   if (!mounted || !isActive) return null;
@@ -253,6 +277,14 @@ export default function SongRequest() {
                   </button>
                 )}
               </div>
+
+              {/* Mensaje de Error */}
+              {errorMsg && (
+                <p className="text-xs text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {errorMsg}
+                </p>
+              )}
 
               {/* Botón Enviar */}
               <motion.button

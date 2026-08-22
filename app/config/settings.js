@@ -91,72 +91,9 @@ const settings = {
   ],
 
   rsvp: { 
-    deadline: "2026-08-20",               // Fecha para evaluación técnica YYYY-MM-DD
-    displayDeadline: "20 de agosto de 2026" // Texto legible que se muestra al usuario
+    deadline: "2026-08-24",               // Fecha para evaluación técnica YYYY-MM-DD
+    displayDeadline: "24 de agosto de 2026" // Texto legible que se muestra al usuario
   },
-
- gallery: [
-    { 
-      url: "/images/gallery/1.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/2.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/3.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/4.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/5.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/6.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/7.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/8.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    },
-    { 
-      url: "/images/gallery/9.jpeg", 
-      title: "TBD", 
-      description: "",
-      date: ""
-    }
-    // Puedes agregar tantas fotos como desees aquí.
-  ],
-
-  loveStory: [
-    { date: "Octubre 2020", title: "Cómo nos conocimos", description: "El inicio de nuestra historia..." },
-    { date: "Diciembre 2023", title: "El Compromiso", description: "Diciendo que sí para siempre..." }
-  ],
 
   sharedMoments: {
     enabled: true,
@@ -249,9 +186,6 @@ const settings = {
     photographer: { name: "Por definir", instagram: "" }
   },
 
-  admin: {
-    pin: "0108",
-  }
 
 };
 
