@@ -27,7 +27,13 @@ export default function Gallery() {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setPhotos(data);
+          // El timestamp (t=) fuerza a la etiqueta <Image/> de Next.js a refrescar 
+          // la visualización si la foto cambia, saltándose la caché del navegador
+          const timestampedData = data.map(img => ({
+             ...img,
+             url: `${img.url}?t=${new Date(img.created_at).getTime()}`
+          }));
+          setPhotos(timestampedData);
         }
       } catch (err) {
         console.error('Error cargando galería:', err);
