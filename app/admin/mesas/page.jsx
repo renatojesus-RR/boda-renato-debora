@@ -169,7 +169,7 @@ export default function AdminMesasPage() {
         {/* Grid de Mesas */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {tableNumbers.map((mesaNum) => {
-            const tableGuests = safeGuests.filter(g => g.numero_mesa === mesaNum);
+            const tableGuests = safeGuests.filter(g => Number(g.numero_mesa) === mesaNum);
 
             return (
               <div key={mesaNum} className="bg-white/5 border border-white/10 p-5 rounded-2xl space-y-3">
